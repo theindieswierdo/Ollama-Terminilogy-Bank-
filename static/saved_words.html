@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Saved Words</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>📖 Saved Words</h1>
+    
+    <div style="margin-bottom: 20px;">
+        <a href="/static/index.html" style="margin-right: 15px;">🔍 Search Words</a>
+        <a href="/static/saved_words.html">📖 Saved Words</a>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+        <button onclick="refreshList()" style="padding: 5px 15px;">🔄 Refresh</button>
+        <button onclick="clearAll()" style="padding: 5px 15px; background-color: #ff4444; color: white; border: none; cursor: pointer; margin-left: 10px;">
+            🗑️ Clear All
+        </button>
+    </div>
+    
+    <div id="wordList" style="margin-top: 20px;">
+        <p>Loading saved words...</p>
+    </div>
+    
+    <div id="status" style="margin-top: 10px; font-style: italic;"></div>
+
+    <script>
+        async function loadSavedWords() {
+            const wordListDiv = document.getElementById('wordList');
+            const statusDiv = document.getElementById('status');
+            
+            wordListDiv.innerHTML = '<p>Loading...</p>';
+            statusDiv.textContent = '';
+            
+            try {
+                const response = await fetch('/saved_words');
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load saved words');
+                }
+                
+                const words = await response.json();
+                
+                if (words.length === 0) {
+                    wordListDiv.innerHTML = `
+                        <p style="color: #666; font-style: italic;">No words saved yet. Go to the <a href="/static/index.html">Search</a> page to save some!</p>
+                    `;
+                    statusDiv.textContent = '📭 No saved words';
+                    return;
+                }
+                
+                // Display each word
+                let html = `<p><strong>Total: ${words.length} words</strong></p>`;
+                words.forEach((item, index) => {
+                    html += `
+                        <div style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div style="flex: 1;">
+                                    <h3 style="margin: 0 0 10px 0;">${index + 1}. ${item.word}</h3>
+                                    <p><strong>Meaning:</strong> ${item.meaning}</p>
+                                    <p><strong>Example:</strong> "${item.usage}"</p>
+                                    <p style="color: #666; font-size: 0.9em;"><strong>Saved:</strong> ${item.saved_at}</p>
+                                </div>
+                                <div>
+                                    <button id ="deleteWordButton" onclick="deleteWord('${item.word}')" style="padding: 5px 15px; background-color: #ff6b6b; color: white; border: none; cursor: pointer;">
+                                        🗑️ Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                wordListDiv.innerHTML = html;
+                statusDiv.textContent = `✅ Loaded ${words.length} words`;
+                statusDiv.style.color = 'green';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                wordListDiv.innerHTML = `<p style="color: red;">❌ Error loading words: ${error.message}</p>`;
+                statusDiv.textContent = '❌ Failed to load';
+                statusDiv.style.color = 'red';
+            }
+        }
+        
+        async function deleteWord(word) {
+            if (!confirm(`Are you sure you want to delete the word "${word}"?`)) {
+                return;
+            }
+            
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = `Deleting "${word}"...`;
+            fetch('/delete_word/${encodeURIComponent(word)}', {
+                method: 'DELETE'
+            })
+            statusDiv.style.color = 'blue';
+            
+            try {
+                const response = await fetch(`/delete_word/${encodeURIComponent(word)}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to delete word');
+                }
+                
+                const data = await response.json();
+                statusDiv.textContent = '✅ ${data.message}';
+                saveButton.textContent = '🗑️ Deleted';
+                statusDiv.style.color = 'green';
+                
+                // Refresh the list
+                loadSavedWords();
+                
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.textContent = `❌ Error: ${error.message}`;
+                statusDiv.style.color = 'red';
+            }
+        }
+        
+        async function clearAll() {
+            if (!confirm('⚠️ Are you sure you want to delete ALL saved words? This cannot be undone!')) {
+                return;
+            }
+            
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = 'Clearing all words...';
+            statusDiv.style.color = 'blue';
+            
+            try {
+                const response = await fetch('/clear_all', {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to clear words');
+                }
+                
+                const data = await response.json();
+                statusDiv.textContent = `✅ ${data.message}`;
+                statusDiv.style.color = 'green';
+                
+                // Refresh the list
+                loadSavedWords();
+                
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.textContent = `❌ Error: ${error.message}`;
+                statusDiv.style.color = 'red';
+            }
+        }
+        
+        function refreshList() {
+            loadSavedWords();
+        }
+        
+        // Load words when page loads
+        loadSavedWords();
+    </script>
+</body>
+</html>

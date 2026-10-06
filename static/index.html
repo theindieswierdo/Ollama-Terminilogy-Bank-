@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Word Definition Finder</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>📚 Word Definition Finder</h1>
+    <p>Enter a word to get its meaning and example usage</p>
+     <!-- Navigation -->
+    <div style="margin-bottom: 20px;">
+        <a href="/static/index.html" style="margin-right: 15px;">🔍 Search Words</a>
+        <a href="/static/saved_words.html">📖 Saved Words</a>
+    </div>
+    
+    <div id="saveMessage" style="margin-bottom: 10px; font-style: italic;">
+        <label for="wordInput">Word:</label>
+        <input type="text" id="wordInput" placeholder="Enter a word..." style="width: 200px; padding: 5px;">
+        <button onclick="getMeaning()" style="padding: 5px 15px;">Get Meaning</button>
+    </div>
+    
+    <div id="result" style="margin-top: 20px; padding: 15px; border: 1px solid #ccc; min-height: 100px;">
+        <p>Results will appear here...</p>
+    </div>
+    
+    <div id="status" style="margin-top: 10px; font-style: italic;"></div>
+
+    <script>
+         // Store the current word data for saving
+        let currentWordData = null;
+        async function getMeaning() {
+            const wordInput = document.getElementById('wordInput');
+            const resultDiv = document.getElementById('result');
+            const statusDiv = document.getElementById('status');
+            const word = wordInput.value.trim();
+            
+            resultDiv.innerHTML = '<p>Loading...</p>';
+            statusDiv.textContent = '';
+            
+            if (!word) {
+                resultDiv.innerHTML = '<p style="color: red;">⚠️ Please enter a word.</p>';
+                return;
+            }
+            
+            try {
+                // First check if Ollama is running
+                const healthCheck = await fetch('/health');
+                const healthData = await healthCheck.json();
+                
+                if (!healthData.ollama) {
+                    resultDiv.innerHTML = '<p style="color: red;">❌ Ollama is not running. Please start it with: ollama serve</p>';
+                    return;
+                }
+                
+                // Get the meaning
+                const response = await fetch('/meaning', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ word: word })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to get meaning');
+                }
+                
+                const data = await response.json();
+                currentWordData = data; // Store the current word data for saving
+                
+                // Display the result
+                resultDiv.innerHTML = `
+                    <h3>📖 ${data.word}</h3>
+                    <p><strong>Meaning:</strong> ${data.meaning}</p>
+                    <p><strong>Example:</strong> "${data.usage}"</p>
+                    <button onclick="saveCurrentWord()" style="margin-top: 10px; padding: 8px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer;">
+                        💾 Save This Word
+                    </button>
+                `;
+                
+                statusDiv.textContent = '✅ Success!';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
+                statusDiv.textContent = '❌ Failed to get meaning';
+            }
+        }
+
+        //save the current word data 
+        async function saveCurrentWord() {
+            if (!currentWordData) {
+                alert('No word to save. Please search for a word first.');
+                return;
+            }
+            const saveMessageDiv = document.getElementById('saveMessage');
+            saveMessageDiv.textContent = 'Saving...';
+            saveMessageDiv.style.color = 'blue';
+            
+            try {
+                const response = await fetch('/save_word', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(currentWordData)
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to save word');
+                }
+                
+                const data = await response.json();
+                saveMessageDiv.textContent = `✅ ${data.message}`;
+                saveMessageDiv.style.color = 'green';
+                
+                // Update the button to show it's saved
+                const saveButton = document.querySelector('button[onclick="saveCurrentWord()"]');
+                if (saveButton) {
+                    saveButton.textContent = '✅ Saved!';
+                    saveButton.disabled = true;
+                    saveButton.style.backgroundColor = '#888';
+                }
+            } catch (error) {
+                console.error('Error saving word', error);
+                saveMessageDiv.textContent = `❌ Error: ${error.message}`;
+                saveMessageDiv.style.color = 'red';
+            }
+        }
+        // Allow Enter key to submit
+        document.getElementById('wordInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                getMeaning();
+            }
+        });        
+        
+        // Auto-check health on page load
+        async function checkHealth() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                const statusDiv = document.getElementById('status');
+                if (data.ollama) {
+                    statusDiv.textContent = '✅ Ollama is running';
+                    statusDiv.style.color = 'green';
+                } else {
+                    statusDiv.textContent = '❌ Ollama is not running';
+                    statusDiv.style.color = 'red';
+                }
+            } catch (error) {
+                const statusDiv = document.getElementById('status');
+                statusDiv.textContent = '❌ Cannot connect to server';
+                statusDiv.style.color = 'red';
+            }
+        }
+        
+        // Check health when page loads
+        checkHealth();
+    </script>
+</body>
+</html>
